@@ -1,8 +1,11 @@
 # Coded for Python 3.
 
-import numpy as np
-import matplotlib.pylab as plt
 import random
+import numpy as np
+from scipy.stats import norm
+import matplotlib.pylab as plt
+import matplotlib.mlab as mlab
+from matplotlib.backends.backend_pdf import PdfPages
 
 
 
@@ -32,34 +35,74 @@ num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
 total_time = 5000
-prices = [50]*102 # Let the first 102 prices be 50.
+num_trials = 10
 
 # The following block of parameters are specific to the example on pg 422-423
 # of "Economic Complexity"
-eta_always = 0.1
 capital_all = 0.08
 prob_active_all = 0.01
 lag_min = 1
-lag_max = 100
+lag_max = 98
 
 
 
-# Instantiate traders.
-fundamentalists = [ Trader('fundamentalist', capital_all, prob_active_all)
-                    for i in range(num_fundamentalists)]
-chartists = [ Trader('chartist', capital_all, prob_active_all,
-                     random.randint(lag_min, lag_max))
-              for i in range(num_chartists) ]
-traders = fundamentalists + chartists
+
+
+pdf_pages = PdfPages('plots_of_prices_and_returns.pdf')
+
+for i in range(num_trials):
+    # Let the first 100 prices be 0.
+    prices = [0]*100
+
+    # Instantiate traders.
+    fundamentalists = [ Trader('fundamentalist', capital_all, prob_active_all)
+                        for i in range(num_fundamentalists)]
+    chartists = [ Trader('chartist', capital_all, prob_active_all,
+                         random.randint(lag_min, lag_max))
+                  for i in range(num_chartists) ]
+    traders = fundamentalists + chartists
+
+    # Run the system for the total amount of time.
+    fundamental_price = 0
+    for t in range(total_time):
+        # Let the fundamental price be a random walk with step size 0.1.
+        eta = 0.1 * random.randint(-1,1)
+        fundamental_price = fundamental_price + eta
+
+        # Compute the new price by Farmer's model:
+        # p_{n+1} = p_n + 1/lambda * sum orders
+        orders = 0
+        for trader in traders:
+            if trader.prob_active > random.random():
+                orders = orders + trader.order(prices, eta)
+        new_price = prices[-1] + 1/lambdaa * orders
+        prices.append(new_price)
 
 
 
-for t in range(total_time):
-    # Compute the new price by
-    # p_{n+1} = p_n + 1/lambda * sum orders
-    orders = 0
-    for trader in traders:
-        if trader.prob_active > random.random():
-            orders = orders + trader.order(prices, eta_always)
-    new_price = prices[-1] + 1/lambdaa * orders
-    prices.append(new_price)
+    # Plot some stuff.
+    plt.plot(range(total_time), prices[100: ])
+    plt.xlabel('Time')
+    plt.ylabel('log(price)')
+    plt.savefig(pdf_pages, format='pdf')
+    plt.close()
+
+    returns = [ prices[i] - prices[i-1] for i in range(1,len(prices)) ]
+    plt.plot(range(total_time-1), returns[100: ])
+    plt.xlabel('Time')
+    plt.ylabel('log(returns)')
+    plt.savefig(pdf_pages, format='pdf')
+    plt.close()
+
+    (mu, sigma) = norm.fit(returns)
+    (n, bins, patches) = plt.hist(returns, 50, normed=1)
+    y = plt.normpdf(bins, mu, sigma)
+    plt.plot(bins, y, 'r--', linewidth=1.5)
+    plt.title('Histogram of normalized returns')
+    plt.savefig(pdf_pages, format='pdf')
+    plt.close()
+
+
+
+pdf_pages.close()
+
