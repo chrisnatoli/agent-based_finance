@@ -4,7 +4,6 @@ import random
 import numpy as np
 from scipy.stats import norm
 import matplotlib.pylab as plt
-import matplotlib.mlab as mlab
 from matplotlib.backends.backend_pdf import PdfPages
 
 
@@ -34,15 +33,16 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 5000
-num_trials = 10
+total_time = 50000
+num_trials = 1
 
 # The following block of parameters are specific to the example on pg 422-423
 # of "Economic Complexity"
 capital_all = 0.08
 prob_active_all = 0.01
 lag_min = 1
-lag_max = 98
+lag_max = 100
+len_past = lag_max + 2 # Number of extra periods needed in the beginning.
 
 
 
@@ -51,12 +51,12 @@ lag_max = 98
 pdf_pages = PdfPages('plots_of_prices_and_returns.pdf')
 
 for i in range(num_trials):
-    # Let the first 100 prices be 0.
-    prices = [0]*100
+    # Let the first len_past prices be 0.
+    prices = [0]*len_past
 
     # Instantiate traders.
     fundamentalists = [ Trader('fundamentalist', capital_all, prob_active_all)
-                        for i in range(num_fundamentalists)]
+                        for i in range(num_fundamentalists) ]
     chartists = [ Trader('chartist', capital_all, prob_active_all,
                          random.randint(lag_min, lag_max))
                   for i in range(num_chartists) ]
@@ -81,21 +81,29 @@ for i in range(num_trials):
 
 
     # Plot some stuff.
-    plt.plot(range(total_time), prices[100: ])
+    L = [ trader.lag for trader in chartists ]
+    for i in range(1,102):
+        if i not in L:
+            print(i)
+    plt.hist(L, 100)
+    plt.savefig(pdf_pages, format='pdf')
+    plt.close()
+
+    plt.plot(range(total_time), prices[len_past: ])
     plt.xlabel('Time')
     plt.ylabel('log(price)')
     plt.savefig(pdf_pages, format='pdf')
     plt.close()
 
     returns = [ prices[i] - prices[i-1] for i in range(1,len(prices)) ]
-    plt.plot(range(total_time-1), returns[100: ])
+    plt.plot(range(total_time-1), returns[len_past: ])
     plt.xlabel('Time')
     plt.ylabel('log(returns)')
     plt.savefig(pdf_pages, format='pdf')
     plt.close()
 
     (mu, sigma) = norm.fit(returns)
-    (n, bins, patches) = plt.hist(returns, 50, normed=1)
+    (n, bins, patches) = plt.hist(returns, 100, normed=1)
     y = plt.normpdf(bins, mu, sigma)
     plt.plot(bins, y, 'r--', linewidth=1.5)
     plt.title('Histogram of normalized returns')
