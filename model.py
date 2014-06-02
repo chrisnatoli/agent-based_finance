@@ -100,9 +100,8 @@ returns = returns_ensemble[0]
 # Kolmogorov-Smirnov test.
 sample_size = int(total_time / 5)
 avg_pvalues = []
-#lens_subinterval = [ 500*i for i in range(1,51) ]
-lens_subinterval = np.arange(500, sample_size, 500)
-num_subintervals = 1000
+lens_subinterval = np.arange(500, 10500, 500)
+num_subintervals = 500
 for len_subinterval in lens_subinterval:
     pvalues = []
     for i in range(num_subintervals):
