@@ -35,8 +35,7 @@ lambdaa = 1
 total_time = 35000
 ensemble_size = 50
 
-# The following block of parameters are specific to the example on pg 422-423
-# of "Economic Complexity"
+# The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
 prob_active_all = 0.01
 lag_min = 1
