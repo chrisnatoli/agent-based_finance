@@ -33,7 +33,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 1000 #35000
+total_time = 5000 #35000
 ensemble_size = 32 #512
 
 # The following block of parameters are specific to an example in Carvalho.
