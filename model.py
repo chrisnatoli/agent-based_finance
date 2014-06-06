@@ -5,6 +5,7 @@ from scipy.stats import norm, ks_2samp
 import matplotlib.pylab as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.collections import LineCollection
+import multiprocessing as mp
 
 ############################################
 ########## CLASSES AND PARAMETERS ##########
@@ -49,10 +50,9 @@ len_past = lag_max + 2 # Number of extra periods needed in the beginning.
 ########## RUNNING THE MODEL ##########
 #######################################
 
-# Instantiate three RNGs.
+# Instantiate separate RNGs.
 lag_RNG = np.random.RandomState(111)
 fundamental_RNG = np.random.RandomState(112)
-activity_RNG = np.random.RandomState(113)
 
 # Instantiate traders.
 fundamentalists = [ Trader('fundamentalist', capital_all, prob_active_all)
@@ -62,7 +62,7 @@ chartists = [ Trader('chartist', capital_all, prob_active_all,
               for i in range(num_chartists) ]
 traders = fundamentalists + chartists
 
-# The fundamental price follows a random walk with steps -0.1, 0, and 0.1.
+# The fundamental log(price) follows a random walk with steps -0.1, 0, and 0.1.
 fundamental_price = 0
 etas = []
 for t in range(total_time):
@@ -73,9 +73,12 @@ for t in range(total_time):
 # Compute multiple time series (ensemble members) with the same traders and
 # same fundamental price series. The zeroth ensemble member is picked
 # to be "truth".
-prices_ensemble = []
-returns_ensemble = []
-for e in range(ensemble_size+1): # +1 since truth is not ensemble member.
+manager = mp.Manager()
+prices_ensemble = manager.list() # Shared lists.
+returns_ensemble = manager.list()
+
+def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
+    activity_RNG = np.random.RandomState(seed) # Each process gets its own RNG.
     prices = [0] * len_past # Let the first len_past prices be 0.
     for t in range(total_time):
         # Market maker collect orders for each period and then computes
@@ -90,8 +93,22 @@ for e in range(ensemble_size+1): # +1 since truth is not ensemble member.
     returns = [ prices[i] - prices[i-1] for i in range(1,len(prices)) ]
     prices_ensemble.append(prices)
     returns_ensemble.append(returns)
-# Dneote the returns "truth" by returns.
-returns = returns_ensemble[0]
+
+run_ensemble_member(113, prices_ensemble, returns_ensemble) # First run truth.
+# Then run the ensemble, one ensemble member per process.
+processes = []
+for e in range(ensemble_size):
+    seed = e
+    process = mp.Process(target=run_ensemble_member,
+                         args=(seed, prices_ensemble, returns_ensemble))
+    processes.append(process)
+    process.start()
+for process in processes: # Wait till they all finish.
+    process.join()
+returns = returns_ensemble[0] # Denote the "true" returns by returns.
+
+
+
 
 
 
@@ -106,7 +123,7 @@ returns = returns_ensemble[0]
 # Kolmogorov-Smirnov test.
 KStest_RNG = np.random.RandomState()
 sample_size = int(total_time / 5)
-avg_pvalues = []
+avg_pvalues = []pp
 lens_subinterval = np.arange(500, 10500, 500)
 num_subintervals = 500
 for len_subinterval in lens_subinterval:
