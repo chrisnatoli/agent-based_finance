@@ -32,8 +32,8 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 35000
-ensemble_size = 50
+total_time = 1000 #35000
+ensemble_size = 32 #512
 
 # The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
@@ -49,11 +49,16 @@ len_past = lag_max + 2 # Number of extra periods needed in the beginning.
 ########## RUNNING THE MODEL ##########
 #######################################
 
+# Instantiate three RNGs.
+lag_RNG = np.random.RandomState(111)
+fundamental_RNG = np.random.RandomState(112)
+activity_RNG = np.random.RandomState(113)
+
 # Instantiate traders.
 fundamentalists = [ Trader('fundamentalist', capital_all, prob_active_all)
                     for i in range(num_fundamentalists) ]
 chartists = [ Trader('chartist', capital_all, prob_active_all,
-                     np.random.randint(lag_min, lag_max+1))
+                     lag_RNG.randint(lag_min, lag_max+1))
               for i in range(num_chartists) ]
 traders = fundamentalists + chartists
 
@@ -61,7 +66,7 @@ traders = fundamentalists + chartists
 fundamental_price = 0
 etas = []
 for t in range(total_time):
-    eta = 0.1 * np.random.randint(-1,2) 
+    eta = 0.1 * fundamental_RNG.randint(-1,2) 
     fundamental_price = fundamental_price + eta
     etas.append(eta)    
 
@@ -78,7 +83,7 @@ for e in range(ensemble_size+1): # +1 since truth is not ensemble member.
         # p_{n+1} = p_n + 1/lambda * sum orders
         orders = 0
         for trader in traders:
-            if trader.prob_active > np.random.random():
+            if trader.prob_active > activity_RNG.rand():
                 orders = orders + trader.order(prices, etas[t])
         new_price = prices[-1] + 1/lambdaa * orders
         prices.append(new_price)
@@ -95,9 +100,11 @@ returns = returns_ensemble[0]
 ########## ANALYSIS ##########
 ##############################
 
+'''
 # Test distribution of random subintervals vs distribution of
 # random sampling of returns. Record the p-values from 
 # Kolmogorov-Smirnov test.
+KStest_RNG = np.random.RandomState()
 sample_size = int(total_time / 5)
 avg_pvalues = []
 lens_subinterval = np.arange(500, 10500, 500)
@@ -105,12 +112,13 @@ num_subintervals = 500
 for len_subinterval in lens_subinterval:
     pvalues = []
     for i in range(num_subintervals):
-        left = np.random.randint(len_past, len(returns)-len_subinterval+1)
+        left = KStest_RNG.randint(len_past, len(returns)-len_subinterval+1)
         subinterval = returns[left:(left+len_subinterval)]
-        sampling = np.random.choice(returns, size=sample_size, replace=False)
+        sampling = KStest_RNG.choice(returns, size=sample_size, replace=False)
         (D, p) = ks_2samp(sampling, subinterval)
         pvalues.append(p)
     avg_pvalues.append(sum(pvalues) / len(pvalues))
+'''
 
 # Plot some stuff into a single pdf.
 pdf_pages = PdfPages('plots.pdf')
@@ -163,7 +171,7 @@ plt.close()
 
 # Histogram of returns.
 (mu, sigma) = norm.fit(returns)
-(n, bins, patches) = plt.hist(returns, 250, normed=1)
+(n, bins, patches) = plt.hist(returns, 50, normed=1)
 y = plt.normpdf(bins, mu, sigma)
 plt.plot(bins, y, 'r--', linewidth=1.5)
 plt.xlim(-50, 50)
@@ -171,6 +179,7 @@ plt.title('Histogram of normalized returns')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
+'''
 # Kolmogorov-Smirnov p-values.
 plt.plot(lens_subinterval, avg_pvalues)
 plt.axhline(y=0.05, color='r', linestyle='--')
@@ -179,5 +188,6 @@ plt.xlabel('Length of subinterval')
 plt.ylabel('p-value')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
+'''
 
 pdf_pages.close()
