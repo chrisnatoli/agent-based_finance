@@ -7,6 +7,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.collections import LineCollection
 import multiprocessing as mp
 
+
 ############################################
 ########## CLASSES AND PARAMETERS ##########
 ############################################
@@ -33,7 +34,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 5000 #35000
+total_time = 2000 #35000
 ensemble_size = 32 #512
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -46,9 +47,14 @@ len_past = lag_max + 2 # Number of extra periods needed in the beginning.
 
 
 
+
 #######################################
 ########## RUNNING THE MODEL ##########
 #######################################
+
+# Compute multiple time series (ensemble members) using the same traders and
+# same fundamental price series. The zeroth ensemble member is picked
+# to be "truth". Each ensemble member is run in its own process.
 
 # Instantiate separate RNGs.
 lag_RNG = np.random.RandomState(111)
@@ -70,13 +76,14 @@ for t in range(total_time):
     fundamental_price = fundamental_price + eta
     etas.append(eta)    
 
-# Compute multiple time series (ensemble members) with the same traders and
-# same fundamental price series. The zeroth ensemble member is picked
-# to be "truth".
+# Create shared lists of price series (i.e., ensembles) for processes
+# to record data to.
 manager = mp.Manager()
-prices_ensemble = manager.list() # Shared lists.
+prices_ensemble = manager.list()
 returns_ensemble = manager.list()
 
+# Put the construction of the price series in a subroutine so that it
+# can be passed to the processes.
 def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
     activity_RNG = np.random.RandomState(seed) # Each process gets its own RNG.
     prices = [0] * len_past # Let the first len_past prices be 0.
@@ -94,7 +101,8 @@ def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
     prices_ensemble.append(prices)
     returns_ensemble.append(returns)
 
-run_ensemble_member(113, prices_ensemble, returns_ensemble) # First run truth.
+# First run truth.
+run_ensemble_member(113, prices_ensemble, returns_ensemble)
 # Then run the ensemble, one ensemble member per process.
 processes = []
 for e in range(ensemble_size):
@@ -106,8 +114,6 @@ for e in range(ensemble_size):
 for process in processes: # Wait till they all finish.
     process.join()
 returns = returns_ensemble[0] # Denote the "true" returns by returns.
-
-
 
 
 
@@ -142,9 +148,29 @@ pdf_pages = PdfPages('plots.pdf')
 
 # Line graph of prices.
 (fig, ax) = plt.subplots()
-# Plot truth in black.
 ax.plot(range(total_time), prices_ensemble[0][len_past: ],
-        color='k', linewidth=1)
+        color='k', linewidth=1) # Plot truth in black.
+# Shade in the regions between 1% and 99%, between 10% and 90%, etc.
+percents = (.01, .1, .2, .3, .4)
+price_lines = []
+for i in range(2*len(percents)):
+    price_lines.append([])
+for t in range(total_time):
+    # For each point in time, figure out the 1% and the 99%, etc.
+    prices = [ price_series[len_past + t]
+               for price_series in prices_ensemble[1: ] ]
+    prices.sort()
+    for i in range(len(percents)):
+        lower_bound = int( len(prices) * percents[i] )
+        upper_bound = int( len(prices) * (1-percents[i]) )
+        minimum = prices[lower_bound]
+        maximum = prices[upper_bound]
+        price_lines[i].append(minimum)
+        price_lines[-i-1].append(maximum)
+for i in range(len(percents)):
+    ax.fill_between(range(total_time), price_lines[i], price_lines[-i-1],
+                    facecolor='green', linewidth=0, alpha=0.2)
+'''
 # Compute the mean price and std_dev across ensemble for each period.
 means = []
 std_devs = []
@@ -159,10 +185,12 @@ means_plus_ks = [ [ means[t] + k*std_devs[t] for t in range(total_time) ]
                   for k in ks ]
 means_minus_ks = [ [ means[t] - k*std_devs[t] for t in range(total_time) ]
                    for k in ks ]
+
 # Plot "histogram from above" of mean prices.
 for k in range(len(ks)):
     ax.fill_between(range(total_time), means_plus_ks[k], means_minus_ks[k],
                     facecolor='green', linewidth=0, alpha=0.2)
+'''
 '''
 # The following plots all price series in the ensemble. It was
 # scrapped in favor of the above "histogram from above" approach.
@@ -175,7 +203,6 @@ plt.xlabel('Time')
 plt.ylabel('log(price)')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
-
 
 # Scatterplot of returns.
 plt.plot(range(total_time-1), returns[len_past: ], '.', markersize=3)
