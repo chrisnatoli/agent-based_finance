@@ -34,7 +34,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 40000 #40000
+total_time = 1000 #40000
 ensemble_size = 64 #512
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -51,6 +51,8 @@ len_past = lag_max + 2 # Number of extra periods needed in the beginning.
 #######################################
 ########## RUNNING THE MODEL ##########
 #######################################
+
+print('Beginning model')
 
 # Compute multiple time series (ensemble members) using the same traders and
 # same fundamental price series. The zeroth ensemble member is picked
@@ -125,12 +127,14 @@ returns = returns_ensemble[0] # Denote the "true" returns by returns.
 ########## ANALYSIS ##########
 ##############################
 
+print('Beginning isopleths plot')
+
 # Plot some stuff into a single pdf.
 pdf_pages = PdfPages('plots.pdf')
 
 
 ##############
-# Line graph of prices.
+# Line graph of prices and isopleths.
 (fig, ax) = plt.subplots()
 
 # Plot truth in black.
@@ -139,15 +143,22 @@ ax.plot(range(total_time), prices_ensemble[0][len_past: ],
 
 # Plot fundamental price in purple.
 ax.plot(range(total_time), fundamental_prices, color='purple',
-        linewidth=1, linestyle=':')
+        linewidth=1, linestyle='--')
 
-# Shade in the regions between 1% and 99%, between 10% and 90%, etc.
+# Shade in the regions between 1% and 99% isopleths, between 10% and
+# 90% isopleths, etc.
 percents = (.01, .1, .2, .3, .4)
-price_lines = []
-for i in range(2*len(percents)):
-    price_lines.append([])
-for t in range(total_time):
-    # For each period in time, figure out the 1% and the 99%, etc.
+
+# Isopleth points is a 2d array of isopleths on one axis and time on the
+# other axis, but flattened into a 1d array since multiprocessing in Python
+# has problems with lists of lists.
+manager = mp.Manager()
+isopleth_points = manager.list([None] * (2*len(percents)*total_time))
+
+# For a single period in time, figure out the 1% and the 99%, etc.,
+# points on the respective isopleth. Put this in a subroutine
+# so it can be split among processes.
+def get_isopleth_points(t, isopleth_points):
     prices = [ price_series[len_past + t]
                for price_series in prices_ensemble[1: ] ]
     prices.sort()
@@ -156,13 +167,30 @@ for t in range(total_time):
         upper_bound = int( len(prices) * (1-percents[i]) )
         minimum = prices[lower_bound]
         maximum = prices[upper_bound]
-        price_lines[i].append(minimum)
-        price_lines[-i-1].append(maximum)
+        isopleth_points[t * 2*len(percents) + i] = minimum
+        isopleth_points[(t+1) * 2*len(percents) - (i+1)] = maximum
 
-# Color in the regions between 1% and 99%, etc.
+# Create one process for each point in time to compute
+# the 2*len(percents) isopleths at that point.
+processes = []
+for t in range(total_time):
+    process = mp.Process(target=get_isopleth_points,
+                         args=(t, isopleth_points))
+    processes.append(process)
+    process.start()
+for process in processes: # Wait till they all finish.
+    process.join()
+
+# Cut isopleth_points into 2d array.
+isopleths = [ [ isopleth_points[t * 2*len(percents) + i]
+                for t in range(total_time) ]
+              for i in range(2*len(percents)) ]
+
+# Color in the regions between 1% and 99% isopleths, etc.
 for i in range(len(percents)):
-    ax.fill_between(range(total_time), price_lines[i], price_lines[-i-1],
+    ax.fill_between(range(total_time), isopleths[i], isopleths[-i-1],
                     facecolor='green', linewidth=0, alpha=0.2)
+
 plt.title('Prices')
 plt.xlabel('Time')
 plt.ylabel('log(price)')
@@ -195,6 +223,8 @@ plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
 
+
+print('Beginning relative entropy plot')
 
 ##############
 # Relative entropy (aka Kullback-Leibler).
