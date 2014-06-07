@@ -34,8 +34,8 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 2000 #35000
-ensemble_size = 32 #512
+total_time = 8000 #40000
+ensemble_size = 64 #512
 
 # The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
@@ -70,11 +70,13 @@ traders = fundamentalists + chartists
 
 # The fundamental log(price) follows a random walk with steps -0.1, 0, and 0.1.
 fundamental_price = 0
+fundamental_prices = []
 etas = []
 for t in range(total_time):
     eta = 0.1 * fundamental_RNG.randint(-1,2) 
     fundamental_price = fundamental_price + eta
-    etas.append(eta)    
+    fundamental_prices.append(fundamental_price)
+    etas.append(eta)
 
 # Create shared lists of price series (i.e., ensembles) for processes
 # to record data to.
@@ -123,33 +125,22 @@ returns = returns_ensemble[0] # Denote the "true" returns by returns.
 ########## ANALYSIS ##########
 ##############################
 
-'''
-# Test distribution of random subintervals vs distribution of
-# random sampling of returns. Record the p-values from 
-# Kolmogorov-Smirnov test.
-KStest_RNG = np.random.RandomState()
-sample_size = int(total_time / 5)
-avg_pvalues = []pp
-lens_subinterval = np.arange(500, 10500, 500)
-num_subintervals = 500
-for len_subinterval in lens_subinterval:
-    pvalues = []
-    for i in range(num_subintervals):
-        left = KStest_RNG.randint(len_past, len(returns)-len_subinterval+1)
-        subinterval = returns[left:(left+len_subinterval)]
-        sampling = KStest_RNG.choice(returns, size=sample_size, replace=False)
-        (D, p) = ks_2samp(sampling, subinterval)
-        pvalues.append(p)
-    avg_pvalues.append(sum(pvalues) / len(pvalues))
-'''
-
 # Plot some stuff into a single pdf.
 pdf_pages = PdfPages('plots.pdf')
 
+
+##############
 # Line graph of prices.
 (fig, ax) = plt.subplots()
+
+# Plot truth in black.
 ax.plot(range(total_time), prices_ensemble[0][len_past: ],
-        color='k', linewidth=1) # Plot truth in black.
+        color='k', linewidth=1)
+
+# Plot fundamental price in orange.
+ax.plot(range(total_time), fundamental_prices, color='orange',
+        linewidth=1, linestyle=':')
+
 # Shade in the regions between 1% and 99%, between 10% and 90%, etc.
 percents = (.01, .1, .2, .3, .4)
 price_lines = []
@@ -167,45 +158,22 @@ for t in range(total_time):
         maximum = prices[upper_bound]
         price_lines[i].append(minimum)
         price_lines[-i-1].append(maximum)
+
+# Color in the regions between 1% and 99%, etc.
 for i in range(len(percents)):
     ax.fill_between(range(total_time), price_lines[i], price_lines[-i-1],
                     facecolor='green', linewidth=0, alpha=0.2)
-'''
-# Compute the mean price and std_dev across ensemble for each period.
-means = []
-std_devs = []
-for t in range(total_time):
-    prices = [ price_series[len_past + t]
-               for price_series in prices_ensemble[1: ] ]
-    means.append(np.mean(prices))
-    std_devs.append(np.std(prices))
-# Compute lines for +/- 0.5, 1, 1.5, 2, 2.5, 3 stddevs.
-ks = (0.5, 1, 1.5, 2, 2.5, 3)
-means_plus_ks = [ [ means[t] + k*std_devs[t] for t in range(total_time) ]
-                  for k in ks ]
-means_minus_ks = [ [ means[t] - k*std_devs[t] for t in range(total_time) ]
-                   for k in ks ]
-
-# Plot "histogram from above" of mean prices.
-for k in range(len(ks)):
-    ax.fill_between(range(total_time), means_plus_ks[k], means_minus_ks[k],
-                    facecolor='green', linewidth=0, alpha=0.2)
-'''
-'''
-# The following plots all price series in the ensemble. It was
-# scrapped in favor of the above "histogram from above" approach.
-for prices in prices_ensemble[1: ]:
-    ax.plot(range(total_time), prices[len_past: ], alpha=0.3,
-            color='g', linewidth=1)
-'''
 plt.title('Prices')
 plt.xlabel('Time')
 plt.ylabel('log(price)')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
+
+
+##############
 # Scatterplot of returns.
-plt.plot(range(total_time-1), returns[len_past: ], '.', markersize=3)
+plt.plot(range(total_time-1), returns[len_past: ], '.', markersize=3, color='k')
 plt.xlim(0, total_time)
 plt.title('Returns')
 plt.xlabel('Time')
@@ -213,9 +181,12 @@ plt.ylabel('log(returns)')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
+
+
+##############
 # Histogram of returns.
 (mu, sigma) = norm.fit(returns)
-(n, bins, patches) = plt.hist(returns, 50, normed=1)
+(n, bins, patches) = plt.hist(returns, 100, normed=1, color='k')
 y = plt.normpdf(bins, mu, sigma)
 plt.plot(bins, y, 'r--', linewidth=1.5)
 plt.xlim(-50, 50)
@@ -223,7 +194,77 @@ plt.title('Histogram of normalized returns')
 plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
+
+
+##############
+# Relative entropy (aka Kullback-Leibler).
+# First compute the background distribution.
+num_bins = 20
+num_periods = int(total_time / 8)
+prices = [ prices_series[len_past + t] for prices_series in prices_ensemble
+           for t in range(total_time - num_periods, total_time) ]
+prices = prices[(len(prices) % num_bins): ] # Make it divisible by num_bins.
+prices.sort()
+bin_size = len(prices) / num_bins
+bin_size = int(bin_size)
+bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
+              for i in range(1, num_bins) ]
+
+# At each point in time, compute the relative entropy of the ensemble
+# with respect to the background distribution.
+relative_entropies = []
+for t in range(total_time):
+    prices = [ price_series[len_past + t] for price_series in prices_ensemble ]
+    probabilities = []
+    for i in range(num_bins - 1):
+        if i == 0:
+            num_in_bin = len([ price for price in prices
+                               if price <= bin_edges[i] ])
+        elif i == num_bins - 2:
+            num_in_bin = len([ price for price in prices
+                               if price > bin_edges[i] ])
+        else:
+            num_in_bin = len([ price for price in prices
+                               if price > bin_edges[i-1]
+                               and price <= bin_edges[i] ])
+        probability = num_in_bin / ensemble_size
+        probabilities.append(probability)
+    q = 1 / num_bins
+    relative_entropy = sum([ np.log(p / q) * p for p in probabilities
+                             if p > 0 ])
+    relative_entropies.append(relative_entropy)
+
+# Plot the relative entropy vs time.
+plt.plot(range(total_time), relative_entropies, color='g')
+plt.title('Relative entropy of ensemble at $t$ w.r.t. background distribution')
+plt.xlabel('Time')
+plt.ylabel('Relative entropy')
+plt.savefig(pdf_pages, format='pdf')
+plt.close()
+
+
+
+
+
 '''
+# Test distribution of random subintervals vs distribution of random
+# sampling of returns. Record the p-values from Kolmogorov-Smirnov
+# test.
+KStest_RNG = np.random.RandomState()
+sample_size = int(total_time / 5)
+avg_pvalues = []
+lens_subinterval = np.arange(500, 10500, 500)
+num_subintervals = 500
+for len_subinterval in lens_subinterval:
+    pvalues = []
+    for i in range(num_subintervals):
+        left = KStest_RNG.randint(len_past, len(returns)-len_subinterval+1)
+        subinterval = returns[left:(left+len_subinterval)]
+        sampling = KStest_RNG.choice(returns, size=sample_size, replace=False)
+        (D, p) = ks_2samp(sampling, subinterval)
+        pvalues.append(p)
+    avg_pvalues.append(sum(pvalues) / len(pvalues))
+
 # Kolmogorov-Smirnov p-values.
 plt.plot(lens_subinterval, avg_pvalues)
 plt.axhline(y=0.05, color='r', linestyle='--')
