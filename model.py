@@ -34,7 +34,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 8000 #40000
+total_time = 40000 #40000
 ensemble_size = 64 #512
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -137,8 +137,8 @@ pdf_pages = PdfPages('plots.pdf')
 ax.plot(range(total_time), prices_ensemble[0][len_past: ],
         color='k', linewidth=1)
 
-# Plot fundamental price in orange.
-ax.plot(range(total_time), fundamental_prices, color='orange',
+# Plot fundamental price in purple.
+ax.plot(range(total_time), fundamental_prices, color='purple',
         linewidth=1, linestyle=':')
 
 # Shade in the regions between 1% and 99%, between 10% and 90%, etc.
@@ -147,7 +147,7 @@ price_lines = []
 for i in range(2*len(percents)):
     price_lines.append([])
 for t in range(total_time):
-    # For each point in time, figure out the 1% and the 99%, etc.
+    # For each period in time, figure out the 1% and the 99%, etc.
     prices = [ price_series[len_past + t]
                for price_series in prices_ensemble[1: ] ]
     prices.sort()
@@ -186,7 +186,7 @@ plt.close()
 ##############
 # Histogram of returns.
 (mu, sigma) = norm.fit(returns)
-(n, bins, patches) = plt.hist(returns, 100, normed=1, color='k')
+(n, bins, patches) = plt.hist(returns, 200, normed=1, color='k')
 y = plt.normpdf(bins, mu, sigma)
 plt.plot(bins, y, 'r--', linewidth=1.5)
 plt.xlim(-50, 50)
@@ -213,7 +213,7 @@ bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
 # At each point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
 relative_entropies = []
-for t in range(total_time):
+for t in range(0, total_time, 100):
     prices = [ price_series[len_past + t] for price_series in prices_ensemble ]
     probabilities = []
     for i in range(num_bins - 1):
@@ -235,8 +235,8 @@ for t in range(total_time):
     relative_entropies.append(relative_entropy)
 
 # Plot the relative entropy vs time.
-plt.plot(range(total_time), relative_entropies, color='g')
-plt.title('Relative entropy of ensemble at $t$ w.r.t. background distribution')
+plt.plot(range(0, total_time, 100), relative_entropies, color='g')
+plt.title('Relative entropy of ensemble at time $t$\nw.r.t. background distribution')
 plt.xlabel('Time')
 plt.ylabel('Relative entropy')
 plt.savefig(pdf_pages, format='pdf')
