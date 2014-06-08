@@ -35,8 +35,8 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 65536
-ensemble_size = 512
+total_time = 2048#65536
+ensemble_size = 128#512
 batch_size = 16
 
 # The following block of parameters are specific to an example in Carvalho.
