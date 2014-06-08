@@ -34,7 +34,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 1000 #40000
+total_time = 8000 #40000
 ensemble_size = 64 #512
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -242,8 +242,12 @@ bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
 
 # At each point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
-relative_entropies = []
-for t in range(0, total_time, 100):
+step_size = 1 #100
+manager = mp.Manager()
+relative_entropies = manager.list([None] * int(total_time / step_size))
+
+# Again, put the computation in a subroutine to pass to a process.
+def compute_relative_entropy(t, relative_entropies):
     prices = [ price_series[len_past + t] for price_series in prices_ensemble ]
     probabilities = []
     for i in range(num_bins - 1):
@@ -262,10 +266,19 @@ for t in range(0, total_time, 100):
     q = 1 / num_bins
     relative_entropy = sum([ np.log(p / q) * p for p in probabilities
                              if p > 0 ])
-    relative_entropies.append(relative_entropy)
+    relative_entropies[int(t/step_size)] = relative_entropy
+
+processes = []
+for t in range(0, total_time, step_size):
+    process = mp.Process(target=compute_relative_entropy,
+                         args=(t, relative_entropies))
+    processes.append(process)
+    process.start()
+for process in processes:
+    process.join()
 
 # Plot the relative entropy vs time.
-plt.plot(range(0, total_time, 100), relative_entropies, color='g')
+plt.plot(range(0, total_time, step_size), relative_entropies, color='g')
 plt.title('Relative entropy of ensemble at time $t$\nw.r.t. background distribution')
 plt.xlabel('Time')
 plt.ylabel('Relative entropy')
