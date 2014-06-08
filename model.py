@@ -1,4 +1,5 @@
-# Requires Python 3, numpy >=1.7.1, and scipy >=0.14
+# Requires Python 3, numpy >=1.7.1, scipy >=0.14,
+# matplotlib, and multiprocessing.
 
 import numpy as np
 from scipy.stats import norm, ks_2samp
@@ -115,8 +116,8 @@ for e in range(ensemble_size):
                          args=(seed, prices_ensemble, returns_ensemble))
     processes.append(process)
     process.start()
-for process in processes: # Wait till they all finish.
     process.join()
+#for process in processes: # Wait till they all finish.
 returns = returns_ensemble[0] # Denote the "true" returns by returns.
 
 
