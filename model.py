@@ -116,8 +116,8 @@ for e in range(ensemble_size):
                          args=(seed, prices_ensemble, returns_ensemble))
     processes.append(process)
     process.start()
+for process in processes: # Wait till they all finish.
     process.join()
-#for process in processes: # Wait till they all finish.
 returns = returns_ensemble[0] # Denote the "true" returns by returns.
 
 
