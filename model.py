@@ -35,7 +35,7 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 65536
+total_time = 32768
 ensemble_size = 512
 batch_size = 16
 
@@ -60,7 +60,7 @@ def batchify_list(liszt):
 ########## RUNNING THE MODEL ##########
 #######################################
 
-#print('Beginning model')
+print('Beginning model')
 
 # Compute multiple time series (ensemble members) using the same traders and
 # same fundamental price series. The zeroth ensemble member is picked
@@ -139,7 +139,7 @@ returns = returns_ensemble[0] # Denote the "true" returns by returns.
 ########## ANALYSIS ##########
 ##############################
 
-#print('Beginning isopleths plot')
+print('Beginning isopleths plot')
 
 # Plot some stuff into a single pdf.
 pdf_pages = PdfPages('plots.pdf')
@@ -240,7 +240,7 @@ plt.close()
 
 
 
-#print('Beginning relative entropy plot')
+print('Beginning relative entropy plot')
 
 ##############
 # Relative entropy (aka Kullback-Leibler).
