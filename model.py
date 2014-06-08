@@ -35,8 +35,8 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 8192 #40000
-ensemble_size = 64 #512
+total_time = 1024#64768
+ensemble_size = 64#512
 batch_size = 16
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -203,7 +203,8 @@ isopleths = [ [ isopleth_points[t * 2*len(percents) + i]
 # Color in the regions between 1% and 99% isopleths, etc.
 for i in range(len(percents)):
     ax.fill_between(range(total_time), isopleths[i], isopleths[-i-1],
-                    facecolor='green', linewidth=0, alpha=0.2)
+                    facecolor='green', edgecolor='none',
+                    linewidth=0, alpha=0.2)
 
 plt.xlim(0, total_time)
 plt.title('Prices')
@@ -257,7 +258,7 @@ bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
 
 # At each point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
-step_size = 1 #128
+step_size = 128
 manager = mp.Manager()
 relative_entropies = manager.list([None] * int(total_time / step_size))
 
