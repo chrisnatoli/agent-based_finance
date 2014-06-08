@@ -9,9 +9,9 @@ from matplotlib.collections import LineCollection
 import multiprocessing as mp
 
 
-############################################
-########## CLASSES AND PARAMETERS ##########
-############################################
+######################################################
+########## CLASSES, PARAMETERS, SUBROUTINES ##########
+######################################################
 
 # Trader class for both fundamentalists and chartists.
 class Trader:
@@ -35,8 +35,9 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 8000 #40000
+total_time = 8192 #40000
 ensemble_size = 64 #512
+batch_size = 16
 
 # The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
@@ -44,6 +45,12 @@ prob_active_all = 0.01
 lag_min = 1
 lag_max = 100
 len_past = lag_max + 2 # Number of extra periods needed in the beginning.
+
+# Subroutine to cut a list into batches.
+def batchify_list(liszt):
+    return [ liszt[(batch_size*i) : (batch_size*(i+1))]
+             for i in range(int(len(liszt) / batch_size)) ]
+
 
 
 
@@ -109,15 +116,19 @@ def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
 # First run truth.
 run_ensemble_member(113, prices_ensemble, returns_ensemble)
 # Then run the ensemble, one ensemble member per process.
-processes = []
-for e in range(ensemble_size):
-    seed = e
-    process = mp.Process(target=run_ensemble_member,
-                         args=(seed, prices_ensemble, returns_ensemble))
-    processes.append(process)
-    process.start()
-for process in processes: # Wait till they all finish.
-    process.join()
+# Run the processes in batches, assuming ensemble_size is divisible
+# by batch_size (if all are powers of 2, this won't be a problem).
+batches = batchify_list(list(range(ensemble_size)))
+for batch in batches:
+    processes = []
+    for e in batch:
+        seed = e
+        process = mp.Process(target=run_ensemble_member,
+                             args=(seed, prices_ensemble, returns_ensemble))
+        processes.append(process)
+        process.start()
+    for process in processes: # Wait till they all finish.
+        process.join()
 returns = returns_ensemble[0] # Denote the "true" returns by returns.
 
 
@@ -173,14 +184,16 @@ def get_isopleth_points(t, isopleth_points):
 
 # Create one process for each point in time to compute
 # the 2*len(percents) isopleths at that point.
-processes = []
-for t in range(total_time):
-    process = mp.Process(target=get_isopleth_points,
-                         args=(t, isopleth_points))
-    processes.append(process)
-    process.start()
-for process in processes: # Wait till they all finish.
-    process.join()
+batches = batchify_list(list(range(total_time)))
+for batch in batches:
+    processes = []
+    for t in batch:
+        process = mp.Process(target=get_isopleth_points,
+                             args=(t, isopleth_points))
+        processes.append(process)
+        process.start()
+    for process in processes: # Wait till they all finish.
+        process.join()
 
 # Cut isopleth_points into 2d array.
 isopleths = [ [ isopleth_points[t * 2*len(percents) + i]
@@ -192,6 +205,7 @@ for i in range(len(percents)):
     ax.fill_between(range(total_time), isopleths[i], isopleths[-i-1],
                     facecolor='green', linewidth=0, alpha=0.2)
 
+plt.xlim(0, total_time)
 plt.title('Prices')
 plt.xlabel('Time')
 plt.ylabel('log(price)')
@@ -243,7 +257,7 @@ bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
 
 # At each point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
-step_size = 1 #100
+step_size = 1 #128
 manager = mp.Manager()
 relative_entropies = manager.list([None] * int(total_time / step_size))
 
@@ -269,17 +283,20 @@ def compute_relative_entropy(t, relative_entropies):
                              if p > 0 ])
     relative_entropies[int(t/step_size)] = relative_entropy
 
-processes = []
-for t in range(0, total_time, step_size):
-    process = mp.Process(target=compute_relative_entropy,
-                         args=(t, relative_entropies))
-    processes.append(process)
-    process.start()
-for process in processes:
-    process.join()
+batches = batchify_list(list(range(0, total_time, step_size)))
+for batch in batches:
+    processes = []
+    for t in batch:
+        process = mp.Process(target=compute_relative_entropy,
+                             args=(t, relative_entropies))
+        processes.append(process)
+        process.start()
+    for process in processes:
+        process.join()
 
 # Plot the relative entropy vs time.
 plt.plot(range(0, total_time, step_size), relative_entropies, color='g')
+plt.xlim(0, total_time)
 plt.title('Relative entropy of ensemble at time $t$\nw.r.t. background distribution')
 plt.xlabel('Time')
 plt.ylabel('Relative entropy')
