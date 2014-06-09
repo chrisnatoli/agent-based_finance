@@ -37,7 +37,7 @@ num_chartists = 5000
 lambdaa = 1
 total_time = 32768
 ensemble_size = 512
-batch_size = 16
+batch_size = 8
 
 # The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
