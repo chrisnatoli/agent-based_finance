@@ -7,7 +7,9 @@ import matplotlib.pylab as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.collections import LineCollection
 import multiprocessing as mp
+import time
 
+start_time = time.time()
 
 ######################################################
 ########## CLASSES, PARAMETERS, SUBROUTINES ##########
@@ -35,9 +37,9 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 16384
-ensemble_size = 512
-batch_size = 16
+total_time = 20000
+ensemble_size = 200 #500
+batch_size = 25
 
 # The following block of parameters are specific to an example in Carvalho.
 capital_all = 0.08
@@ -60,7 +62,7 @@ def batchify_list(liszt):
 ########## RUNNING THE MODEL ##########
 #######################################
 
-print('Beginning model')
+print('Beginning model.')
 
 # Compute multiple time series (ensemble members) using the same traders and
 # same fundamental price series. The zeroth ensemble member is picked
@@ -96,10 +98,13 @@ returns_ensemble = manager.list()
 
 # Put the construction of the price series in a subroutine so that it
 # can be passed to the processes.
-def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
-    activity_RNG = np.random.RandomState(seed) # Each process gets its own RNG.
-    prices = [0] * len_past # Let the first len_past prices be 0.
-    for t in range(total_time):
+def run_ensemble_member(seed, prices_ensemble, returns_ensemble,
+                        starting_price=0, starting_time=0):
+    # Each process gets its own RNG.
+    activity_RNG = np.random.RandomState(seed) 
+    # Let the first (len_past+starting_time) prices have the starting_price.
+    prices = [starting_price] * (len_past + starting_time)
+    for t in range(total_time - starting_time):
         # Market maker collect orders for each period and then computes
         # the new price according to Farmer's model:
         # p_{n+1} = p_n + 1/lambda * sum orders
@@ -117,7 +122,7 @@ def run_ensemble_member(seed, prices_ensemble, returns_ensemble):
 run_ensemble_member(113, prices_ensemble, returns_ensemble)
 # Then run the ensemble, one ensemble member per process.
 # Run the processes in batches, assuming ensemble_size is divisible
-# by batch_size (if all are powers of 2, this won't be a problem).
+# by batch_size (if all are multiples of 20, this won't be a problem).
 batches = batchify_list(list(range(ensemble_size)))
 for batch in batches:
     processes = []
@@ -132,14 +137,15 @@ for batch in batches:
 returns = returns_ensemble[0] # Denote the "true" returns by returns.
 
 
-
-
+time_model_ends = time.time()
+delta = time_model_ends - start_time
+print('Model took {} hrs and {} min.'.format(int(delta/3600), int(delta/60)))
 
 ##############################
 ########## ANALYSIS ##########
 ##############################
 
-print('Beginning isopleths plot')
+print('Beginning isopleths plot.')
 
 # Plot some stuff into a single pdf.
 pdf_pages = PdfPages('plots.pdf')
@@ -153,8 +159,8 @@ pdf_pages = PdfPages('plots.pdf')
 ax.plot(range(total_time), prices_ensemble[0][len_past: ],
         color='k', linewidth=1)
 
-# Plot fundamental price in purple.
-ax.plot(range(total_time), fundamental_prices, color='purple',
+# Plot fundamental price in orange.
+ax.plot(range(total_time), fundamental_prices, color='orange',
         linewidth=1, linestyle='--')
 
 # Shade in the regions between 1% and 99% isopleths, between 10% and
@@ -184,6 +190,7 @@ def get_isopleth_points(t, isopleth_points):
 
 # Create one process for each point in time to compute
 # the 2*len(percents) isopleths at that point.
+# Again assumes length of time is divisible by batch size.
 batches = batchify_list(list(range(total_time)))
 for batch in batches:
     processes = []
@@ -217,7 +224,7 @@ plt.close()
 
 ##############
 # Scatterplot of returns.
-plt.plot(range(total_time-1), returns[len_past: ], '.', markersize=3, color='k')
+plt.plot(range(total_time-1), returns[len_past: ], color='k')
 plt.xlim(0, total_time)
 plt.title('Returns')
 plt.xlabel('Time')
@@ -230,7 +237,7 @@ plt.close()
 ##############
 # Histogram of returns.
 (mu, sigma) = norm.fit(returns)
-(n, bins, patches) = plt.hist(returns, 200, normed=1, color='k')
+(n, bins, patches) = plt.hist(returns, 300, normed=1, color='k')
 y = plt.normpdf(bins, mu, sigma)
 plt.plot(bins, y, 'r--', linewidth=1.5)
 plt.xlim(-50, 50)
@@ -239,7 +246,10 @@ plt.savefig(pdf_pages, format='pdf')
 plt.close()
 
 
-
+time_isopleths_ends = time.time()
+delta = time_isopelths_ends - time_model_ends
+print('Isopleths plot took {} hrs and {} min.'.format(int(delta/3600),
+                                                      int(delta/60)))
 print('Beginning relative entropy plot')
 
 ##############
@@ -256,9 +266,8 @@ bin_size = int(bin_size)
 bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
               for i in range(1, num_bins) ]
 
-# At each point in time, compute the relative entropy of the ensemble
+# At each 100th point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
-step_size = 128
 manager = mp.Manager()
 relative_entropies = manager.list([None] * int(total_time / step_size))
 
@@ -284,6 +293,9 @@ def compute_relative_entropy(t, relative_entropies):
                              if p > 0 ])
     relative_entropies[int(t/step_size)] = relative_entropy
 
+# Run processes in batches. Assumes (total time / step size) is 
+# divisible by batch size.
+step_size = 100
 batches = batchify_list(list(range(0, total_time, step_size)))
 for batch in batches:
     processes = []
@@ -338,3 +350,12 @@ plt.close()
 '''
 
 pdf_pages.close()
+
+
+end_time = time.time()
+delta = end_time - time_isopleths_end
+print('Relative entropy plot took {} hrs and {} min.'.format(int(delta/3600),
+                                                             int(delta/60)))
+delta = end_time - start_time
+print('Entire script took {} hrs and {} min.'.format(int(delta/3600),
+                                                     int(delta/60)))
