@@ -37,8 +37,8 @@ class Trader:
 num_fundamentalists = 5000
 num_chartists = 5000
 lambdaa = 1
-total_time = 20000
-ensemble_size = 200 #500
+total_time = 25000
+ensemble_size = 500
 batch_size = 25
 
 # The following block of parameters are specific to an example in Carvalho.
@@ -139,7 +139,7 @@ returns = returns_ensemble[0] # Denote the "true" returns by returns.
 
 time_model_ends = time.time()
 delta = time_model_ends - start_time
-print('Model took {} hrs and {} min.'.format(int(delta/3600), int(delta/60)))
+print('Model took [{} hrs {} min].'.format(int(delta/3600), int(delta/60)))
 
 ##############################
 ########## ANALYSIS ##########
@@ -247,10 +247,10 @@ plt.close()
 
 
 time_isopleths_ends = time.time()
-delta = time_isopelths_ends - time_model_ends
-print('Isopleths plot took {} hrs and {} min.'.format(int(delta/3600),
+delta = time_isopleths_ends - time_model_ends
+print('Isopleths plot [took {} hrs {} min].'.format(int(delta/3600),
                                                       int(delta/60)))
-print('Beginning relative entropy plot')
+print('Beginning relative entropy plot.')
 
 ##############
 # Relative entropy (aka Kullback-Leibler).
@@ -268,6 +268,7 @@ bin_edges = [ (prices[i*bin_size - 1] + prices[i*bin_size]) / 2
 
 # At each 100th point in time, compute the relative entropy of the ensemble
 # with respect to the background distribution.
+step_size = 100
 manager = mp.Manager()
 relative_entropies = manager.list([None] * int(total_time / step_size))
 
@@ -295,7 +296,6 @@ def compute_relative_entropy(t, relative_entropies):
 
 # Run processes in batches. Assumes (total time / step size) is 
 # divisible by batch size.
-step_size = 100
 batches = batchify_list(list(range(0, total_time, step_size)))
 for batch in batches:
     processes = []
@@ -353,9 +353,9 @@ pdf_pages.close()
 
 
 end_time = time.time()
-delta = end_time - time_isopleths_end
-print('Relative entropy plot took {} hrs and {} min.'.format(int(delta/3600),
+delta = end_time - time_isopleths_ends
+print('Relative entropy plot took [{} hrs {} min].'.format(int(delta/3600),
                                                              int(delta/60)))
 delta = end_time - start_time
-print('Entire script took {} hrs and {} min.'.format(int(delta/3600),
+print('Entire script took [{} hrs {} min].'.format(int(delta/3600),
                                                      int(delta/60)))
