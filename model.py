@@ -345,9 +345,9 @@ def relative_entropy_plot(prices_ensemble, bin_edges, starting_time):
 time_script_begins = time.time()
 pdf_pages = PdfPages('plots.pdf')
 
-total_time = 2000#30000
-ensemble_size = 20#200
-batch_size = 16
+total_time = 20000#30000
+ensemble_size = 200#200
+batch_size = 25
 num_bins = 20
 
 num_fundamentalists = 5000
@@ -383,8 +383,8 @@ bin_edges = compute_background_distribution(prices_ensemble)
 relative_entropy_plot(prices_ensemble, bin_edges, starting_time)
 
 # Run a separate ensemble with a different starting time and price.
-starting_price = 100
-starting_time = 1000
+starting_price = 500
+starting_time = 5000
 series_length = total_time - starting_time
 (late_prices_ensemble,
  late_returns_ensemble) = run_ensemble(traders, fundamental_prices,
