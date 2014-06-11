@@ -154,7 +154,8 @@ def run_ensemble(traders, etas, starting_price, starting_time):
 #################### ANALYSIS ####################
 ##################################################
 
-def isopleths_plot(true_price_series, fundamental_prices, prices_ensemble):
+def isopleths_plot(true_price_series, fundamental_prices, prices_ensemble,
+                   starting_time):
     beginning = time.time()
 
     (fig, ax) = plt.subplots()
@@ -181,7 +182,7 @@ def isopleths_plot(true_price_series, fundamental_prices, prices_ensemble):
     # points on the respective isopleth. Put this in a subroutine
     # so it can be split among processes.
     def get_isopleth_points(t, isopleth_points):
-        prices = [ price_series[len_past + t]
+        prices = [ price_series[len_past + starting_time + t]
                    for price_series in prices_ensemble ]
         prices.sort()
         for i in range(len(percents)):
@@ -266,7 +267,7 @@ def compute_background_distribution(prices_ensemble):
 
 # At each 100th point in time, compute the relative entropy of the
 # ensemble with respect to the background distribution.
-def relative_entropy_plot(prices_ensemble, bin_edges):
+def relative_entropy_plot(prices_ensemble, bin_edges, starting_time):
     beginning = time.time()
 
     step_size = 100
@@ -275,7 +276,7 @@ def relative_entropy_plot(prices_ensemble, bin_edges):
 
     # Again, put the computation in a subroutine to pass to a process.
     def compute_relative_entropy(t, relative_entropies):
-        prices = [ price_series[len_past + t]
+        prices = [ price_series[len_past + starting_time + t]
                    for price_series in prices_ensemble ]
         probabilities = []
         for i in range(num_bins - 1):
@@ -309,7 +310,7 @@ def relative_entropy_plot(prices_ensemble, bin_edges):
             process.join()
 
     # Plot the relative entropy vs time.
-    plt.plot(range(0, series_length, step_size), relative_entropies, color='g')
+    plt.plot(range(starting_time, total_time, step_size), relative_entropies, color='g')
     plt.xlim(0, total_time)
     plt.ylim(0, plt.ylim()[1])
     plt.title('Relative entropy of ensemble at time $t$\nw.r.t. background distribution')
@@ -363,9 +364,22 @@ prices_ensemble, returns_ensemble = run_ensemble(traders, etas, 0, 0)
 # Analyze and plot the results.
 returns_lineplot(true_returns_series)
 returns_histogram(true_returns_series)
-isopleths_plot(true_price_series, fundamental_prices, prices_ensemble)
+isopleths_plot(true_price_series, fundamental_prices, prices_ensemble,
+               starting_time)
 bin_edges = compute_background_distribution(prices_ensemble)
-relative_entropy_plot(prices_ensemble, bin_edges)
+relative_entropy_plot(prices_ensemble, bin_edges, starting_time)
+
+# Run a separate ensemble with a different starting time and price.
+starting_price = 100
+starting_time = 1000
+series_length = total_time - starting_time
+(late_prices_ensemble,
+ late_returns_ensemble) = run_ensemble(traders, etas, starting_price,
+                                       starting_time)
+isopleths_plot(true_price_series, fundamental_prices, late_prices_ensemble,
+               starting_time)
+relative_entropy_plot(late_prices_ensemble, bin_edges, starting_time)
+
 
 
 pdf_pages.close()
