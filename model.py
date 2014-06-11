@@ -42,15 +42,27 @@ class Trader:
         self.prob_active = prob_active                 # p^(i)
         self.lag = lag                                 # theta^(i)
 
-    def order(self, prices, eta):                      # omega_{n+1}^(i)
+    def order(self, prices, fundamental_prices):       # omega_{n+1}^(i)
         if self.strategy == 'fundamentalist':
+            '''
             # omega_{n+1}^(i) = -c^(i) * (r_n - eta_n)
-            return - self.capital * (prices[-1] - prices[-2] - eta)
+            order = - self.capital * ((prices[-1] - prices[-2])
+                                      - (fundamental_prices[-1]
+                                         - fundamental_prices[-2]))
+            '''
+            # omega_{n+1}^(i) = c^(i) * (nu_n - p_n)
+            order = self.capital * (fundamental_prices[-1] - prices[-1])
+
         elif self.strategy == 'chartist':
             # omega_{n+1}^(j) = c^(j) * (r_n - r_{n-theta})
-            return self.capital * ((prices[-1] - prices[-2])
-                                   - (prices[-1 - self.lag]
-                                      - prices[-2 - self.lag]))
+            order = self.capital * ((prices[-1] - prices[-2])
+                                    - (prices[-1 - self.lag]
+                                       - prices[-2 - self.lag]))
+
+        # Bound order by 1.
+        order = np.sign(order) * (1 - np.exp(-np.abs(order))) 
+        #print('{}\t{}'.format(self.strategy,order))
+        return order
 
 lag_RNG = np.random.RandomState(111)
 
@@ -72,22 +84,19 @@ def instantiate_traders():
 ###################################################
 
 def construct_fundamental_prices():
-    # The fundamental log(price) follows a random walk with steps -0.1, 0,
-    # or 0.1.
+    # The fundamental log(price) follows a random walk with normally
+    # distributed steps with mean 0 and sigma 0.1.
     fundamental_RNG = np.random.RandomState(112)
 
-    fundamental_price = 0
-    fundamental_prices = []
-    etas = []
+    fundamental_prices = [0]
     for t in range(total_time):
-        eta = 0.1 * fundamental_RNG.randint(-1,2) 
-        fundamental_price = fundamental_price + eta
+        eta = 0.1 * fundamental_RNG.randn() 
+        fundamental_price = fundamental_prices[-1] + eta
         fundamental_prices.append(fundamental_price)
-        etas.append(eta)
 
-    return(fundamental_prices, etas)
+    return fundamental_prices
 
-def construct_price_series(seed, traders, etas,
+def construct_price_series(seed, traders, fundamental_prices,
                            starting_price, starting_time,
                            is_truth,
                            prices_ensemble=None, returns_ensemble=None):
@@ -101,10 +110,11 @@ def construct_price_series(seed, traders, etas,
         orders = 0
         for trader in traders:
             if trader.prob_active > activity_RNG.rand():
-                orders = orders + trader.order(prices, etas[t])
+                orders = orders + trader.order(prices,
+                                               fundamental_prices[:t+2])
         new_price = prices[-1] + 1/lambdaa * orders
         prices.append(new_price)
-    returns = [ prices[i] - prices[i-1] for i in range(1,len(prices)) ]
+    returns = [ prices[i] - prices[i-1] for i in range(1, len(prices)) ]
 
     if is_truth:
         return (prices, returns)
@@ -113,7 +123,8 @@ def construct_price_series(seed, traders, etas,
         returns_ensemble.append(returns)
 
 # Compute an ensemble of different time series.
-def run_ensemble(traders, etas, starting_price, starting_time):
+def run_ensemble(traders, fundamental_prices,
+                 starting_price, starting_time):
     beginning = time.time()
     
     # Create shared lists of price series (i.e., ensembles) for processes
@@ -130,7 +141,7 @@ def run_ensemble(traders, etas, starting_price, starting_time):
             seed = e
             # Run one ensemble member per process.
             process = mp.Process(target=construct_price_series,
-                                 args=(seed, traders, etas,
+                                 args=(seed, traders, fundamental_prices,
                                        starting_price, starting_time,
                                        False, prices_ensemble,
                                        returns_ensemble))
@@ -165,7 +176,7 @@ def isopleths_plot(true_price_series, fundamental_prices, prices_ensemble,
             color='k', linewidth=1)
 
     # Plot fundamental price in orange.
-    ax.plot(range(total_time), fundamental_prices, color='orange',
+    ax.plot(range(total_time), fundamental_prices[1:], color='orange',
             linewidth=1, linestyle='--')
 
     # Shade in the regions between 1% and 99% isopleths, between 10% and
@@ -355,11 +366,13 @@ series_length = total_time - starting_time
 
 # Run the main system.
 traders = instantiate_traders()
-fundamental_prices, etas = construct_fundamental_prices()
+fundamental_prices = construct_fundamental_prices()
 (true_price_series,
- true_returns_series) = construct_price_series(113, traders, etas,
+ true_returns_series) = construct_price_series(114, traders,
+                                               fundamental_prices,
                                                0, starting_time, True)
-prices_ensemble, returns_ensemble = run_ensemble(traders, etas, 0, 0)
+(prices_ensemble,
+ returns_ensemble) = run_ensemble(traders, fundamental_prices, 0, 0)
 
 # Analyze and plot the results.
 returns_lineplot(true_returns_series)
@@ -374,8 +387,8 @@ starting_price = 100
 starting_time = 1000
 series_length = total_time - starting_time
 (late_prices_ensemble,
- late_returns_ensemble) = run_ensemble(traders, etas, starting_price,
-                                       starting_time)
+ late_returns_ensemble) = run_ensemble(traders, fundamental_prices,
+                                       starting_price, starting_time)
 isopleths_plot(true_price_series, fundamental_prices, late_prices_ensemble,
                starting_time)
 relative_entropy_plot(late_prices_ensemble, bin_edges, starting_time)
